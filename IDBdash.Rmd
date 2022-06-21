@@ -10,11 +10,14 @@ library(tidyverse)
 library(flexdashboard)
 library(lubridate)
 library(forcats)
+library(tidyjson)
+library(rjson)
 
-# This dashboard analyzes repository metrics provided by the Illinois Data Bank in csv format. See https://databank.illinois.edu/metrics for sample metrics files and a description of the variables included.
+# This dashboard analyzes repository metrics provided by the Illinois Data Bank in csv and JSON format. See https://databank.illinois.edu/metrics for sample metrics files and a description of the variables included.
 
 # Several features incorporate icons from Font Awesome (as indicated by fa-<icon name>). You can search the collection online, but not all icons are included in R. To work properly, the icon has to be free and in whichever version of Font Awesome R is using. These were chosen from: https://fontawesome.com/v4/icons/. 
 ```
+
 
 ```{r setup datasets}
 
@@ -38,6 +41,7 @@ datasets <- mutate(datasets,
       select(year, doi, num_bytes, kb, mb, gb, num_files, everything())
 ```
 
+
 ```{r setup datafiles}
 
 datafiles <- as_tibble(read_csv("datafiles_2021-12-31.csv"))
@@ -57,6 +61,33 @@ datafiles <- mutate(datafiles,
   select(year, doi, num_bytes, kb, mb, gb, file_format, everything())
 ```
 
+
+```{r setup downloads}
+
+#File converted to txt because couldn't get it to import as json.
+
+downloads <- read_file("downloads.txt")
+downloads <- downloads %>%                   
+  gather_array %>%          
+  spread_values(            
+    doi = jstring("doi"), 
+    date = jstring("date"),    
+    tally = jnumber("tally")
+  ) 
+
+#Convert date from chr to date and add year variable.
+downloads <- downloads %>% 
+  mutate(
+    date = ymd(date),
+    year = year(date))
+
+#Filter out data after 12/31/2021.
+downloads <- filter(downloads, year < 2022)
+
+```
+
+
+
 ```{r subject names}
 
 # Shorten subject names so they display better in charts.
@@ -71,6 +102,7 @@ datasets <- datasets %>%
 
 ```
 
+
 ```{r colors}
 # Set up custom color palettes.
 # Bright colors are used in scatterplots because small points are more difficult to see.
@@ -83,7 +115,7 @@ mycolsbright <- c("firebrick1", "chartreuse3", "cyan3", "maroon3", "gold1")
 
 
 
-Summary {data-icon="fa-signal"}
+Overview {data-icon="fa-signal"}
 ===================================== 
 
 
@@ -186,7 +218,7 @@ valueBox(Files, icon = "fa-file", color = "#6e8b3d")
 Row 
 -------------------------------------
 
-### Dataset Summary by Year
+### Collection Summary by Year
 
 ``` {r sumtime}
 
@@ -198,26 +230,34 @@ knitr::kable(sumtime, digits = 0, format.args = list(big.mark = ",",
 ```
 
 
-### Dataset Size Percentiles
-
-```{r dpercentiles}
-
-# line graph - dataset size percentiles
-
-dpercent <- tibble(percentile = 75:99,
-             GB = round(quantile(datasets$gb, probs = seq(.75, .99, by = .01)),2))
 
 
-ggplot(data = dpercent, mapping = aes(x = percentile, y = GB, label = round(GB),0)) +
-  geom_line(color = "chocolate") +
-  geom_point() +
-  geom_text(nudge_y = 20) +
-  theme_light() +
-  labs(title = "75th - 99th Percentiles"
-      )
-  
+### Downloads by Year
+
+```{r downloads year}
+
+# downloads per  year
+sumdl <- downloads %>%
+  # setting Year as character to prevent the table from formatting it as a number  
+  mutate(year = year((date))) %>% 
+    group_by (year) %>% 
+    summarise(
+        total = sum(tally)
+    )
+
+# plot
+ggplot(sumdl, aes(x=year, y=total)) +
+  geom_segment( aes(x=year, xend=year, y=0, yend=total), color="grey", size=1.5) +
+  geom_point( size=5, color="maroon") +
+  geom_text(aes(label = format(total, big.mark= ",", scientific = FALSE)), vjust = -1) +
+  theme_classic() +  
+  xlab("") +
+  ylab("Downloads") +
+  labs(title = "Total Downloads per Year") +
+  ylim(0,100000)
 
 ```
+
 
 Row {data-height=25}
 -------------------------------------
@@ -227,7 +267,137 @@ Row {data-height=25}
 
 
 
-Stats {data-icon="fa-calculator"}
+By Subject {data-icon="fa-book-open"}
+===================================== 
+
+Row {data-height=350}
+-------------------------------------
+
+
+### Datasets
+
+```{r datasets sub}
+
+# bar chart - count of datasets published by subject
+
+sumsub <- datasets %>%
+               group_by(subject) %>% 
+               summarise(
+                 Datasets = n(),
+                 GB = sum(gb),
+                 Files = sum(num_files)
+                 
+            )
+
+ggplot(sumsub, aes(x= subject, y = Datasets, fill = subject)) +
+  geom_col() +
+  scale_fill_manual(values = mycolsdark) +
+  theme_light() +
+  geom_text(aes(label = Datasets), vjust = -.2) +
+  coord_cartesian(clip = 'off') +
+  guides(x = guide_axis(angle = 45)) +
+  theme(legend.position="none") +
+  
+  labs(title = "Number of Datasets Deposited by Subject",
+       x = "Subject",
+       y = "Datasets"
+       )
+
+```    
+
+
+### Total Deposits
+
+```{r size sub, echo}
+
+# bar chart - sum of GB published per subject
+
+ggplot(sumsub, aes(x= subject, y = GB, fill = subject)) +
+  geom_col() +
+  scale_fill_manual(values = mycolsdark) +
+  theme_light() +
+  geom_text(aes(label = GB), vjust = -0.2) +
+  coord_cartesian(clip = 'off') +
+  guides(x = guide_axis(angle = 45)) +
+  theme(legend.position="none") +
+  labs(title = "Deposit Totals by Subject",
+       x = "Subject",
+       y = "GB"
+       )
+
+```    
+
+
+### Total Number of Files
+
+```{r files sub}
+
+# bar chart - count of files published per subject
+
+ggplot(sumsub, aes(x= subject, y = Files, fill = subject)) +
+  geom_col() +
+  scale_fill_manual(values = mycolsdark) +
+  theme_light() +
+  geom_text(aes(label = Files), vjust = -0.2) +
+  coord_cartesian(clip = 'off') +
+  guides(x = guide_axis(angle = 45)) +
+  theme(legend.position="none") +
+  labs(title = "Number of Files Deposited by Subject",
+       x = "Subject",
+       y = "GB"
+       )
+
+```    
+
+
+Row {data-height=350}
+-------------------------------------
+  
+   
+### Subject Summary
+
+``` {r sumsub}
+
+# table - summary by subject
+
+knitr::kable(sumsub, digits = 0, format.args = list(big.mark = ",",
+  scientific = FALSE))            
+            
+```
+
+
+### Datasets over Time
+
+
+``` {r sub cumulative}
+
+# line graph - count of datasets published each year by subject
+
+## this code is clunky, but it works
+
+cumulative <- as_tibble(datasets %>%
+  group_by(year) %>% 
+  count(subject)) %>% 
+  group_by(subject) %>% 
+  mutate(c_subtotal = cumsum(n)) %>% 
+  arrange(subject)
+
+
+ggplot(cumulative,
+       aes(x= year, y = c_subtotal, fill = subject)) +
+  geom_area(alpha=0.6 , size= .6, colour="white") +
+    scale_fill_manual(values = mycolsdark) +
+    
+  theme(legend.position="bottom") +
+  labs(title = "Cumulative Datasets by Subject",
+       x = "Year",
+       y = "Total Datasets")
+
+
+```
+
+
+Datasets {data-icon="fa-folder-open"}
 ===================================== 
 
 ```{r stat setup}
@@ -360,141 +530,34 @@ knitr::kable(filestats, digits = 0, format.args = list(big.mark = ",",
   scientific = FALSE))        
 ```
 
+### Dataset Size Percentiles
+
+```{r dpercentiles}
+
+# line graph - dataset size percentiles
+
+dpercent <- tibble(percentile = 75:99,
+             GB = round(quantile(datasets$gb, probs = seq(.75, .99, by = .01)),2))
+
+
+ggplot(data = dpercent, mapping = aes(x = percentile, y = GB, label = round(GB),0)) +
+  geom_line(color = "grey", size = 1.25) +
+  geom_point(color = "darkcyan", size = 3) +
+  geom_text(nudge_y = 20) +
+  theme_light() +
+  labs(title = "75th - 99th Percentiles"
+      )
+  
+
+```
+
+
 Row {data-height=25}
 -------------------------------------
 
 ### Note - % indicates percentiles (i.e. 95% indicates the bottom 95% of datasets, excluding the top 5% as outliers).
 
 
-
-Subjects {data-icon="fa-book-open"}
-===================================== 
-
-Row {data-height=350}
--------------------------------------
-
-
-### Datasets
-
-```{r datasets sub}
-
-# bar chart - count of datasets published by subject
-
-sumsub <- datasets %>%
-               group_by(subject) %>% 
-               summarise(
-                 Datasets = n(),
-                 GB = sum(gb),
-                 Files = sum(num_files)
-                 
-            )
-
-ggplot(sumsub, aes(x= subject, y = Datasets, fill = subject)) +
-  geom_col() +
-  scale_fill_manual(values = mycolsdark) +
-  theme_light() +
-  geom_text(aes(label = Datasets), vjust = -.2) +
-  coord_cartesian(clip = 'off') +
-  guides(x = guide_axis(angle = 45)) +
-  theme(legend.position="none") +
-  
-  labs(title = "Number of Datasets Deposited by Subject",
-       x = "Subject",
-       y = "Datasets"
-       )
-
-```    
-
-
-### Total Deposits
-
-```{r size sub, echo}
-
-# bar chart - sum of GB published per subject
-
-ggplot(sumsub, aes(x= subject, y = GB, fill = subject)) +
-  geom_col() +
-  scale_fill_manual(values = mycolsdark) +
-  theme_light() +
-  geom_text(aes(label = GB), vjust = -0.2) +
-  coord_cartesian(clip = 'off') +
-  guides(x = guide_axis(angle = 45)) +
-  theme(legend.position="none") +
-  labs(title = "Deposit Totals by Subject",
-       x = "Subject",
-       y = "GB"
-       )
-
-```    
-
-
-### Total Number of Files
-
-```{r files sub}
-
-# bar chart - count of files published per subject
-
-ggplot(sumsub, aes(x= subject, y = Files, fill = subject)) +
-  geom_col() +
-  scale_fill_manual(values = mycolsdark) +
-  theme_light() +
-  geom_text(aes(label = Files), vjust = -0.2) +
-  coord_cartesian(clip = 'off') +
-  guides(x = guide_axis(angle = 45)) +
-  theme(legend.position="none") +
-  labs(title = "Number of Files Deposited by Subject",
-       x = "Subject",
-       y = "GB"
-       )
-
-```    
-
-
-Row {data-height=350}
--------------------------------------
-  
-   
-### Subject Summary
-
-``` {r sumsub}
-
-# table - summary by subject
-
-knitr::kable(sumsub, digits = 0, format.args = list(big.mark = ",",
-  scientific = FALSE))            
-            
-```
-
-
-### Datasets over Time
-
-
-``` {r sub cumulative}
-
-# line graph - count of datasets published each year by subject
-
-## this code is clunky, but it works
-
-cumulative <- as_tibble(datasets %>%
-  group_by(year) %>% 
-  count(subject)) %>% 
-  group_by(subject) %>% 
-  mutate(c_subtotal = cumsum(n)) %>% 
-  arrange(subject)
-
-
-ggplot(cumulative,
-       aes(x= year, y = c_subtotal, fill = subject)) +
-  geom_area(alpha=0.6 , size= .6, colour="white") +
-    scale_fill_manual(values = mycolsdark) +
-    
-  theme(legend.position="bottom") +
-  labs(title = "Cumulative Datasets by Subject",
-       x = "Year",
-       y = "Total Datasets")
-
-
-```
 
 
 Files {data-icon="fa-file"}
@@ -613,8 +676,8 @@ fpercent <- tibble(percentile = 75:99,
 
 
 ggplot(data = fpercent, mapping = aes(x = percentile, y = GB, label = round(GB),0)) +
-  geom_line(color = "chocolate") +
-  geom_point() +
+  geom_line(color = "grey", size = 1.25) +
+  geom_point(color = "maroon", size = 3) +
   geom_text(nudge_y = 1) +
   theme_light()
   
