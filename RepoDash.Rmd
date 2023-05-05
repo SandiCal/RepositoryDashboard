@@ -23,6 +23,7 @@ datasets <- as_tibble(read_csv("datasets.csv"))
 # Adjust datasets table.
 
 # Remove future dates
+datasets$pub_date <- mdy(datasets$pub_date)
 datasets <- filter(datasets,
                    pub_date <= today())
 
@@ -49,6 +50,7 @@ datafiles <- as_tibble(read_csv("datafiles.csv"))
 # Adjust datafiles table.
 
 # Remove future dates
+datafiles$pub_date <- mdy(datafiles$pub_date)
 datafiles <- filter(datafiles,
                    pub_date <= today())
 
@@ -100,7 +102,7 @@ datasets <- datasets %>%
 
 ```
 
-```{r colors}
+```{r styles}
 # Set up custom color palettes.
 # Bright colors are used in scatterplots because small points are more difficult to see.
 # If the number of subjects increases, the number of colors will need to as well.
@@ -108,6 +110,15 @@ datasets <- datasets %>%
 mycolsdark <- c("#9C4E16", "#536A2F", "#007070", "#b03060", "#6A602F")
 mycolsbright <- c("firebrick1", "chartreuse3", "cyan3", "maroon3", "gold1")
 mycolsmed <- c("chocolate", "darkolivegreen4", "darkcyan", "maroon", "darkkhaki")
+mycolslight <- c("#f0a168", "#a4cb60", "#65d6d6", "#c05d82", "#ede56e")
+
+## graph style
+theme <- theme(axis.text = element_text(size = 12), 
+        axis.title = element_text(size = 12), 
+        plot.title = element_text(size = 16),
+        legend.text = element_text(size = 12)
+        )
+
 
 ```
 
@@ -139,8 +150,10 @@ sumtime <- datasets %>%
 ggplot(sumtime, aes(x= Year, y = Datasets)) +
   geom_col(fill="darkcyan") +
   geom_text(aes(label = Datasets), vjust = -0.5) +
-  theme_classic() +
-  labs(title = "Number of Datasets Deposited by Year")
+  theme_classic()+
+  theme+
+  labs(title = "Number of Datasets Deposited by Year")+
+  ylim(0,125)
 
 ```    
  
@@ -154,8 +167,10 @@ ggplot(sumtime, aes(x= Year, y = Datasets)) +
 ggplot(sumtime, aes(x= Year, y = GB)) +
   geom_col(fill = "chocolate") +
   geom_text(aes(label = GB), vjust = -0.5) +
-  theme_classic() +
-  labs(title = "Annual Deposit Totals")
+  theme_classic()+
+  theme+
+  labs(title = "Annual Deposit Totals")+
+  ylim(0,5500)
 
 ```   
 
@@ -169,8 +184,10 @@ ggplot(sumtime, aes(x= Year, y = GB)) +
 ggplot(sumtime, aes(x= Year, y = Files)) +
   geom_col(fill = "darkolivegreen4") +
   geom_text(aes(label = Files), vjust = -0.5) +
-  theme_classic() +
-  labs(title = "Annual File Count")
+  theme_classic()+
+  theme+
+  labs(title = "Annual File Count")+
+  ylim(0,1500)
 
 ```
 
@@ -239,13 +256,15 @@ sumdl <- downloads %>%
     summarise(
         total = sum(tally)
     )
+  
 
 # plot
 ggplot(sumdl, aes(x=year, y=total)) +
   geom_segment( aes(x=year, xend=year, y=0, yend=total), color="grey", size=1.5) +
-  geom_point( size=5, color="maroon") +
-  geom_text(aes(label = format(total, big.mark= ",", scientific = FALSE)), vjust = -1) +
-  theme_classic() +  
+  geom_point( size=7, color="maroon") +
+  geom_text(aes(label = format(total, big.mark= ",", scientific = FALSE)), vjust = -2) +
+  theme_classic()+
+  theme+  
   xlab("") +
   ylab("Downloads") +
   labs(title = "Total Downloads per Year") +
@@ -303,9 +322,10 @@ Row {data-height = 400}
 # scatterplot - size and complexity of all datasets; presence of outliers forces the vast majority of datasets into a small clump, demonstrating the value of the 75th and 95th percentiles above
 
 ggplot(datasets, aes(x = num_files, y = gb, color = subject)) +
-  geom_point(position = "jitter", size = 2.5) +
+  geom_point(position = "jitter", size = 3.5) +
   scale_colour_manual(values = mycolsbright) +
   theme_light() +
+  theme+
   labs(title = "All Datasets - Size and Complexity",
        x = "Number of Files",
        y = "Size (GB)")  
@@ -321,9 +341,10 @@ ggplot(datasets, aes(x = num_files, y = gb, color = subject)) +
 
 ggplot(datasets %>% filter(quantile(gb, 0.95)>gb & quantile(num_files, 0.95)>num_files), 
        aes(x = num_files, y = gb, color = subject)) +
-  geom_point(position = "jitter", size = 2.5) +
+  geom_point(position = "jitter", size = 3.5) +
   scale_colour_manual(values = mycolsbright) +
-  theme_light() +
+  theme_light()+
+  theme+
   labs(title = "95% of Datasets - Size and Complexity",
        x = "Number of Files",
        y = "Size (GB)")  
@@ -339,12 +360,14 @@ ggplot(datasets %>% filter(quantile(gb, 0.95)>gb & quantile(num_files, 0.95)>num
 
 ggplot(datasets %>% filter(quantile(gb, 0.75)>gb & quantile(num_files, 0.75)>num_files), 
        aes(x = num_files, y = gb, color = subject)) +
-  geom_point(position = "jitter", size = 2.5) +
+  geom_point(position = "jitter", size = 3.5) +
   scale_colour_manual(values = mycolsbright) +
-  theme_light() +
+  theme_light()+
+  theme+
   labs(title = "75% of Datasets - Size and Complexity",
        x = "Number of Files",
        y = "Size (GB)")  
+
 
 ```
 
@@ -410,6 +433,7 @@ ggplot(data = dpercent, mapping = aes(x = percentile, y = GB, label = round(GB),
   geom_point(color = "chocolate", size = 3) +
   geom_text(nudge_y = 20) +
   theme_light() +
+  theme +
   labs(title = "75th - 99th Percentiles"
       )
   
@@ -437,27 +461,30 @@ Row {data-height=350}
 # bar chart - count of datasets published by subject
 
 sumsub <- datasets %>%
-               group_by(subject) %>% 
-               summarise(
-                 Datasets = n(),
-                 GB = sum(gb),
-                 Files = sum(num_files)
-                 
-            )
+  filter(subject != "NA") %>% 
+  group_by(subject) %>% 
+  summarise(
+  Datasets = n(),
+  GB = sum(gb),
+  Files = sum(num_files)
+  )
 
 ggplot(sumsub, aes(x= subject, y = Datasets, fill = subject)) +
   geom_col() +
   scale_fill_manual(values = mycolsmed) +
-  theme_light() +
-  geom_text(aes(label = Datasets), vjust = -.2) +
+    geom_text(aes(label = Datasets), vjust = -.2) +
   coord_cartesian(clip = 'off') +
   guides(x = guide_axis(angle = 45)) +
+  
+  theme_light() +
+  theme+
   theme(legend.position="none") +
   
   labs(title = "Number of Datasets Deposited by Subject",
        x = "Subject",
        y = "Datasets"
-       )
+       )+
+  ylim(0,350)
 
 ```    
 
@@ -471,15 +498,18 @@ ggplot(sumsub, aes(x= subject, y = Datasets, fill = subject)) +
 ggplot(sumsub, aes(x= subject, y = GB, fill = subject)) +
   geom_col() +
   scale_fill_manual(values = mycolsmed) +
-  theme_light() +
   geom_text(aes(label = GB), vjust = -0.2) +
   coord_cartesian(clip = 'off') +
   guides(x = guide_axis(angle = 45)) +
+  
+  theme_light() +
+  theme +
   theme(legend.position="none") +
   labs(title = "Deposit Totals by Subject",
        x = "Subject",
        y = "GB"
-       )
+       )+
+  ylim(0,6000)
 
 ```    
 
@@ -493,7 +523,9 @@ ggplot(sumsub, aes(x= subject, y = GB, fill = subject)) +
 ggplot(sumsub, aes(x= subject, y = Files, fill = subject)) +
   geom_col() +
   scale_fill_manual(values = mycolsmed) +
+  
   theme_light() +
+  theme+
   geom_text(aes(label = Files), vjust = -0.2) +
   coord_cartesian(clip = 'off') +
   guides(x = guide_axis(angle = 45)) +
@@ -501,7 +533,8 @@ ggplot(sumsub, aes(x= subject, y = Files, fill = subject)) +
   labs(title = "Number of Files Deposited by Subject",
        x = "Subject",
        y = "GB"
-       )
+       )+
+  ylim(0,3500)
 
 ```    
 
@@ -532,18 +565,23 @@ knitr::kable(sumsub, digits = 0, format.args = list(big.mark = ",",
 ## this code is clunky, but it works
 
 cumulative <- as_tibble(datasets %>%
+  filter(subject != "NA") %>% 
   group_by(year) %>% 
   count(subject)) %>% 
-  group_by(subject) %>% 
+  complete(year, subject, fill = list(n = 0)) %>% ## represent all subjects in all years even if the number of pubs is 0
+  group_by(subject) %>%
   mutate(c_subtotal = cumsum(n)) %>% 
-  arrange(subject)
-
+  arrange(subject) 
+  
+  
 
 ggplot(cumulative,
        aes(x= year, y = c_subtotal, fill = subject)) +
+  
   theme_light() +
-  geom_area( size= .6) +
-    scale_fill_manual(values = mycolsmed) +
+  theme+
+  geom_area() +
+    scale_fill_manual(values = mycolslight) +
     
   theme(legend.position="bottom") +
   labs(title = "Cumulative Datasets by Subject",
@@ -673,7 +711,8 @@ ggplot(data = fpercent, mapping = aes(x = percentile, y = GB, label = round(GB),
   geom_line(color = "grey", size = 1.25) +
   geom_point(color = "darkolivegreen4", size = 3) +
   geom_text(nudge_y = 1) +
-  theme_light()
+  theme_light()+
+  theme
   
 
 ```
@@ -686,8 +725,9 @@ ggplot(data = fpercent, mapping = aes(x = percentile, y = GB, label = round(GB),
 # scatterplot - file size over time
 
 ggplot(data = datafiles, mapping = aes(x=pub_date, y=gb)) +
-geom_point(position = "jitter", color = "#007070") +
+geom_point(position = "jitter", color = "#007070", size = 3.5) +
   theme_light() +
+  theme+
   labs(title = "All Files"
        ) 
 
