@@ -10,11 +10,13 @@ library(tidyverse)
 library(flexdashboard)
 library(lubridate)
 library(forcats)
+library(scales)
 
 # This dashboard analyzes repository metrics provided by the Illinois Data Bank in csv and json format. See https://databank.illinois.edu/metrics for sample metrics files and a description of the variables included.
 
 # Several features incorporate icons from Font Awesome (as indicated by fa-<icon name>). You can search the collection online, but not all icons are included in R. To work properly, the icon has to be free and in whichever version of Font Awesome R is using. These were chosen from: https://fontawesome.com/v4/icons/. 
 ```
+
 
 ```{r setup datasets}
 
@@ -23,34 +25,37 @@ datasets <- as_tibble(read_csv("datasets.csv"))
 # Adjust datasets table.
 
 # Remove future dates
-datasets$pub_date <- mdy(datasets$pub_date)
+datasets$pub_date <- mdy(datasets$pub_date) # if this line fails, dates may already be formatted as dates, in which case comment out this line
 datasets <- filter(datasets,
                    pub_date <= today())
-
 
 # Convert bytes to other measures and add them as columns so we can easily toggle between units. 
 datasets <- mutate(datasets,
       kb = round((num_bytes/1024),2),
       mb = round((kb/1024),2),
       gb = round((mb/1024),2),
-#format pub_date as date and isolate year as new variable
-      year = year(pub_date)
-         ) %>% 
+      # add fiscal year column
+      FY = if_else(month(pub_date) >= 7,
+                          year(pub_date) + 1,
+                          year(pub_date))
+         ) |> 
+      
   # set subject as factor for easier analysis
-      arrange(subject) %>% 
-      mutate(subject = as_factor(subject)) %>% 
+      arrange(subject) |> 
+      mutate(subject = as_factor(subject)) |> 
   # Reorder columns for easier viewing.
-      select(year, doi, num_bytes, kb, mb, gb, num_files, everything())
+      select(FY, doi, num_bytes, kb, mb, gb, num_files, everything())
 ```
+
 
 ```{r setup datafiles}
 
 datafiles <- as_tibble(read_csv("datafiles.csv"))
 
-# Adjust datafiles table.
+# Adjust datafiles table. 
 
-# Remove future dates
-datafiles$pub_date <- mdy(datafiles$pub_date)
+# Remove future dates 
+datafiles$pub_date <- mdy(datafiles$pub_date) # if this line fails, dates may already be formatted as dates, in which case comment out this line
 datafiles <- filter(datafiles,
                    pub_date <= today())
 
@@ -59,20 +64,23 @@ datafiles <- mutate(datafiles,
       kb = round((num_bytes/1024),2),
       mb = round((kb/1024),2),
       gb = round((mb/1024),2),
-#format pub_date as date and isolate year as new variable
-     
-      year = year(pub_date)
-)%>% 
+      # add fiscal year column
+      FY = if_else(month(pub_date) >= 7,
+                          year(pub_date) + 1,
+                          year(pub_date))
+         ) |> 
+
 # Reorder columns for easier viewing.       
-  select(year, doi, num_bytes, kb, mb, gb, file_format, everything())
+  select(FY, doi, num_bytes, kb, mb, gb, file_format, everything())
+
 ```
 
 ```{r setup downloads}
 library(tidyjson)
 library(rjson)
 
-downloads <- fromJSON(file = "testjson.json")
-downloads <- downloads %>%                   
+downloads <- fromJSON(file = "downloads.json")
+downloads <- downloads %>%                    
   gather_array %>%          
   spread_values(            
     doi = jstring("doi"), 
@@ -84,14 +92,18 @@ downloads <- downloads %>%
 downloads <- downloads %>% 
   mutate(
     date = ymd(date),
-    year = year(date))
+    FY = if_else(month(date) >= 7,
+                          year(date) + 1,
+                          year(date))
+         ) 
 
 ```
+
 
 ```{r subject names}
 
 # Shorten subject names so they display better in charts.
-datasets <- datasets %>% 
+datasets <- datasets |> 
   mutate(subject = fct_recode(subject,
                               "Arts_Hum" = "Arts and Humanities",
                               "Life_Sci" = "Life Sciences",
@@ -101,6 +113,7 @@ datasets <- datasets %>%
                               )) 
 
 ```
+
 
 ```{r styles}
 # Set up custom color palettes.
@@ -137,23 +150,23 @@ Row
 
 # bar chart - count of datasets published each year
 
-sumtime <- datasets %>%
-  # setting Year as character to prevent the table from formatting it as a number  
-  mutate(Year = as.character(year((pub_date)))) %>% 
-    group_by (Year) %>% 
+sumtime <- datasets |>
+    group_by (FY) |> 
     summarise(
         Datasets = n(),
         GB = sum(gb),
         Files = sum(num_files)
     )
 
-ggplot(sumtime, aes(x= Year, y = Datasets)) +
+ggplot(sumtime, aes(x= FY, y = Datasets)) +
   geom_col(fill="darkcyan") +
   geom_text(aes(label = Datasets), vjust = -0.5) +
   theme_classic()+
   theme+
-  labs(title = "Number of Datasets Deposited by Year")+
-  ylim(0,125)
+  labs(title = "Dataset Count by FY")+
+  # create x axis labels for every 1 year
+  scale_x_continuous(breaks = breaks_width(1))
+  
 
 ```    
  
@@ -164,13 +177,14 @@ ggplot(sumtime, aes(x= Year, y = Datasets)) +
 
 # bar chart - total amount deposited each year 
 
-ggplot(sumtime, aes(x= Year, y = GB)) +
+ggplot(sumtime, aes(x= FY, y = GB)) +
   geom_col(fill = "chocolate") +
-  geom_text(aes(label = GB), vjust = -0.5) +
+  geom_text(aes(label = round(GB)), vjust = -0.5) +
   theme_classic()+
   theme+
-  labs(title = "Annual Deposit Totals")+
-  ylim(0,5500)
+  labs(title = "Deposit Totals by FY")+
+  # create x axis labels for every 1 year
+  scale_x_continuous(breaks = breaks_width(1))
 
 ```   
 
@@ -181,13 +195,14 @@ ggplot(sumtime, aes(x= Year, y = GB)) +
 
 #bar chart - number of files deposited each year
 
-ggplot(sumtime, aes(x= Year, y = Files)) +
+ggplot(sumtime, aes(x= FY, y = Files)) +
   geom_col(fill = "darkolivegreen4") +
   geom_text(aes(label = Files), vjust = -0.5) +
   theme_classic()+
   theme+
-  labs(title = "Annual File Count")+
-  ylim(0,1500)
+  labs(title = "File Count by FY")+
+  # create x axis labels for every 1 year
+  scale_x_continuous(breaks = breaks_width(1))
 
 ```
 
@@ -239,8 +254,8 @@ Row
 
 # table - dataset summaries by year
 
-knitr::kable(sumtime, digits = 0, format.args = list(big.mark = ",",
-  scientific = FALSE))
+knitr::kable(sumtime, digits = 0,
+  scientific = FALSE)
 
 ```
 
@@ -249,18 +264,17 @@ knitr::kable(sumtime, digits = 0, format.args = list(big.mark = ",",
 ```{r downloads year}
 
 # downloads per  year
-sumdl <- downloads %>%
-  # setting Year as character to prevent the table from formatting it as a number  
-  mutate(year = year((date))) %>% 
-    group_by (year) %>% 
+sumdl <- downloads |>
+    group_by (FY) |> 
     summarise(
         total = sum(tally)
-    )
+    ) 
+  
   
 
 # plot
-ggplot(sumdl, aes(x=year, y=total)) +
-  geom_segment( aes(x=year, xend=year, y=0, yend=total), color="grey", size=1.5) +
+ggplot(sumdl, aes(x=FY, y=total)) +
+  geom_segment( aes(x=FY, xend=FY, y=0, yend=total), color="grey", size=1.5) +
   geom_point( size=7, color="maroon") +
   geom_text(aes(label = format(total, big.mark= ",", scientific = FALSE)), vjust = -2) +
   theme_classic()+
@@ -268,7 +282,12 @@ ggplot(sumdl, aes(x=year, y=total)) +
   xlab("") +
   ylab("Downloads") +
   labs(title = "Total Downloads per Year") +
-  ylim(0,100000)
+  
+  # create x axis labels for every 1 year
+  scale_x_continuous(breaks = breaks_width(1))+
+  # prevent scientific notation in y axis labels and make room for data labels
+  scale_y_continuous(labels = comma, limits = c(0,160000))
+  
 
 ```
 
@@ -276,7 +295,7 @@ ggplot(sumdl, aes(x=year, y=total)) +
 Row {data-height=25}
 -------------------------------------
 
-### Note - To zoom in on individual elements, make your window narrower until it displays one chart at a time.
+### Data as of 6/30/2025. To zoom in on individual elements, make your window narrower until it displays one chart at a time.
 
 
 
@@ -288,9 +307,8 @@ Datasets {data-icon="fa-calculator"}
 
 # Set up quantile analysis for dataset size and number of files. 95th percentile excludes largest outliers. 75th percentile excludes large and moderate outliers. 
 
-sizestats <- datasets %>%
-    mutate(Year = as.character(year(pub_date))) %>% 
-    group_by (Year) %>% 
+sizestats <- datasets |>
+    group_by (FY) |> 
     summarise(
         Mean = mean(gb),
         "75%" = quantile(gb,.75),
@@ -298,9 +316,8 @@ sizestats <- datasets %>%
         Max = max(gb)
         )
 
-filestats <- datasets %>%
-    mutate(Year = as.character(year(pub_date))) %>% 
-    group_by (Year) %>% 
+filestats <- datasets |>
+    group_by (FY) |> 
     summarise(
         Mean = mean(num_files),
         "75%" = quantile(num_files,.75),
@@ -339,7 +356,7 @@ ggplot(datasets, aes(x = num_files, y = gb, color = subject)) +
 
 # scatterplot - size and complexity of bottom 95% of datasets
 
-ggplot(datasets %>% filter(quantile(gb, 0.95)>gb & quantile(num_files, 0.95)>num_files), 
+ggplot(datasets |> filter(quantile(gb, 0.95)>gb & quantile(num_files, 0.95)>num_files), 
        aes(x = num_files, y = gb, color = subject)) +
   geom_point(position = "jitter", size = 3.5) +
   scale_colour_manual(values = mycolsbright) +
@@ -358,7 +375,7 @@ ggplot(datasets %>% filter(quantile(gb, 0.95)>gb & quantile(num_files, 0.95)>num
 
 # scatterplot - size and complexity of bottom 75% of datasets in terms of both size and number of files
 
-ggplot(datasets %>% filter(quantile(gb, 0.75)>gb & quantile(num_files, 0.75)>num_files), 
+ggplot(datasets |> filter(quantile(gb, 0.75)>gb & quantile(num_files, 0.75)>num_files), 
        aes(x = num_files, y = gb, color = subject)) +
   geom_point(position = "jitter", size = 3.5) +
   scale_colour_manual(values = mycolsbright) +
@@ -406,8 +423,7 @@ Row {data-height=350}
 
 ```{r sizestats, echo=FALSE}
 
-knitr::kable(sizestats, digits = 0, format.args = list(big.mark = ",",
-  scientific = FALSE))        
+knitr::kable(sizestats, digits = 0, scientific = FALSE)       
 ```
 
 
@@ -415,8 +431,7 @@ knitr::kable(sizestats, digits = 0, format.args = list(big.mark = ",",
 
 ```{r filestats, echo=FALSE}
 
-knitr::kable(filestats, digits = 0, format.args = list(big.mark = ",",
-  scientific = FALSE))        
+knitr::kable(filestats, digits = 0, scientific = FALSE)
 ```
 ### Dataset Size Percentiles
 
@@ -443,7 +458,7 @@ ggplot(data = dpercent, mapping = aes(x = percentile, y = GB, label = round(GB),
 Row {data-height=25}
 -------------------------------------
 
-### Note - % indicates percentiles (i.e. 95% indicates the bottom 95% of datasets, excluding the top 5% as outliers).
+### Data as of 6/30/2025. % indicates percentiles (i.e. 95% indicates the bottom 95% of datasets, excluding the top 5% as outliers).
 
 
 
@@ -460,9 +475,9 @@ Row {data-height=350}
 
 # bar chart - count of datasets published by subject
 
-sumsub <- datasets %>%
-  filter(subject != "NA") %>% 
-  group_by(subject) %>% 
+sumsub <- datasets |>
+  filter(subject != "NA") |> 
+  group_by(subject) |> 
   summarise(
   Datasets = n(),
   GB = sum(gb),
@@ -480,11 +495,12 @@ ggplot(sumsub, aes(x= subject, y = Datasets, fill = subject)) +
   theme+
   theme(legend.position="none") +
   
-  labs(title = "Number of Datasets Deposited by Subject",
+  labs(title = "Dataset Count by Subject",
        x = "Subject",
        y = "Datasets"
        )+
-  ylim(0,350)
+  # make room for data labels
+  ylim(0,550)
 
 ```    
 
@@ -509,7 +525,8 @@ ggplot(sumsub, aes(x= subject, y = GB, fill = subject)) +
        x = "Subject",
        y = "GB"
        )+
-  ylim(0,6000)
+  # make room for data labels
+  ylim(0,10000)
 
 ```    
 
@@ -530,11 +547,12 @@ ggplot(sumsub, aes(x= subject, y = Files, fill = subject)) +
   coord_cartesian(clip = 'off') +
   guides(x = guide_axis(angle = 45)) +
   theme(legend.position="none") +
-  labs(title = "Number of Files Deposited by Subject",
+  labs(title = "File Count by Subject",
        x = "Subject",
        y = "GB"
        )+
-  ylim(0,3500)
+  # make room for data labels
+  ylim(0,4500)
 
 ```    
 
@@ -564,19 +582,19 @@ knitr::kable(sumsub, digits = 0, format.args = list(big.mark = ",",
 
 ## this code is clunky, but it works
 
-cumulative <- as_tibble(datasets %>%
-  filter(subject != "NA") %>% 
-  group_by(year) %>% 
-  count(subject)) %>% 
-  complete(year, subject, fill = list(n = 0)) %>% ## represent all subjects in all years even if the number of pubs is 0
-  group_by(subject) %>%
-  mutate(c_subtotal = cumsum(n)) %>% 
+cumulative <- as_tibble(datasets |>
+  filter(subject != "NA") |> 
+  group_by(FY) |> 
+  count(subject)) |> 
+  complete(FY, subject, fill = list(n = 0)) |> ## represent all subjects in all years even if the number of pubs is 0
+  group_by(subject) |>
+  mutate(c_subtotal = cumsum(n)) |> 
   arrange(subject) 
   
   
 
 ggplot(cumulative,
-       aes(x= year, y = c_subtotal, fill = subject)) +
+       aes(x= FY, y = c_subtotal, fill = subject)) +
   
   theme_light() +
   theme+
@@ -584,12 +602,19 @@ ggplot(cumulative,
     scale_fill_manual(values = mycolslight) +
     
   theme(legend.position="bottom") +
-  labs(title = "Cumulative Datasets by Subject",
-       x = "Year",
-       y = "Total Datasets")
+  labs(title = "Cumulative Dataset Count by Subject",
+       x = "FY",
+       y = "Total Datasets")+
+  # create x axis labels for every 1 year
+  scale_x_continuous(breaks = breaks_width(1))
 
 
 ```
+
+Row {data-height=25}
+-------------------------------------
+
+### Data as of 6/30/2025. 
 
 
 Files {data-icon="fa-file"}
@@ -600,20 +625,20 @@ Files {data-icon="fa-file"}
 # Modify the list of file formats so they form fewer, more meaningful groups. 
 
 # File formats are given in a Type/Subtype format. Copy the format variable and split it at the / into two new variables file_type (broad categories) and file_subtype (specific formats).
-datafiles <- datafiles %>% 
-  mutate(x = file_format)%>% 
+datafiles <- datafiles |> 
+  mutate(x = file_format)|> 
         separate(x, sep = "/", c("file_type", "file_subtype"), extra = "drop", fill = "right") 
 
 # File_subtype has too many formats to visualize well, and some formats make more sense grouped together. Create a file_bucket variable by copying file_subtype and collapsing any subtypes that would be better grouped together (e.g. zip and tar files can be combined into a new bucket "compressed".)
-datafiles <- datafiles %>% 
-  arrange(file_subtype) %>% 
+datafiles <- datafiles |> 
+  arrange(file_subtype) |> 
   mutate(file_bucket = as_factor(file_subtype),
    file_bucket = fct_collapse(file_bucket,
                             html = c("html; charset=KOI8-R","html; charset=windows-1252"), 
                             compressed = c("zip", "x-tar", "x-7z-compressed", "x-gzip", "x-rar-compressed")
-                            )) %>% 
+                            )) |> 
   # shift the position of the new bucket column 
-select(year, doi, num_bytes, kb, mb, gb, file_format, file_type, file_subtype, file_bucket, everything())
+select(FY, doi, num_bytes, kb, mb, gb, file_format, file_type, file_subtype, file_bucket, everything())
 ```
 
 
@@ -627,9 +652,9 @@ Row
 
 # table - top 10 file formats by count with all smaller formats grouped into Other
 
-knitr::kable(datafiles %>% 
-  filter(!is.na(file_bucket)) %>%
-  mutate(file_bucket = fct_lump_n(file_bucket, n=9)) %>% 
+knitr::kable(datafiles |> 
+  filter(!is.na(file_bucket)) |>
+  mutate(file_bucket = fct_lump_n(file_bucket, n=9)) |> 
     count(file_bucket, sort = TRUE),
 
 digits = 0, col.names = c("File Format", "Count"), format.args = list(big.mark = ",", scientific = FALSE)) 
@@ -642,16 +667,16 @@ digits = 0, col.names = c("File Format", "Count"), format.args = list(big.mark =
 
 # table - top 10 file formats by file size with all smaller formats grouped into Other
 
-knitr::kable(datafiles %>% 
+knitr::kable(datafiles |> 
   #create summary by GB
-  filter(!is.na(file_bucket)) %>%
-    group_by(file_bucket) %>% 
-    summarise(GB = sum(gb)) %>% 
+  filter(!is.na(file_bucket)) |>
+    group_by(file_bucket) |> 
+    summarise(GB = sum(gb)) |> 
   #identify top 9 formats by gb and lump others together
-  mutate(file_bucket = fct_lump_n(file_bucket, n=9, w=GB)) %>% 
+  mutate(file_bucket = fct_lump_n(file_bucket, n=9, w=GB)) |> 
   #group all the other together and summarize
-  group_by(file_bucket) %>% 
-  summarise(GB = sum(GB)) %>% 
+  group_by(file_bucket) |> 
+  summarise(GB = sum(GB)) |> 
   arrange(desc(GB)),
   
 digits = 2, col.names = c("File Format", "GB"), format.args = list(big.mark = ",", scientific = FALSE)) 
@@ -670,8 +695,8 @@ Row
 # box - average size of compressed files
 
 AveCompressed = 
-  datafiles %>% 
-  filter(file_bucket == "compressed") %>% 
+  datafiles |> 
+  filter(file_bucket == "compressed") |> 
   summarise(Mean = round(mean(gb),1))
 valueBox(AveCompressed, icon = "fa-file-zip-o", color = "#536A2F")
                    
@@ -685,8 +710,8 @@ valueBox(AveCompressed, icon = "fa-file-zip-o", color = "#536A2F")
 # box - average size of all other files
 
 AveCompressed = 
-  datafiles %>% 
-  filter(file_bucket != "compressed") %>% 
+  datafiles |> 
+  filter(file_bucket != "compressed") |> 
   summarise(Mean = round(mean(gb),2))
 valueBox(AveCompressed, icon = "fa-file", color = "#007070")
                    
@@ -728,12 +753,18 @@ ggplot(data = datafiles, mapping = aes(x=pub_date, y=gb)) +
 geom_point(position = "jitter", color = "#007070", size = 3.5) +
   theme_light() +
   theme+
-  labs(title = "All Files"
+  labs(title = "File Size",
+       x = "Publication Date",
+       y = "GB"
        ) 
 
 
 ```
 
+Row {data-height=25}
+-------------------------------------
+
+### Data as of 6/30/2025. 
 
 
 File Detail {data-icon="fa-file-text"}
@@ -750,8 +781,8 @@ Row {data-height=350}
 
 # table - broad summary by file_type
 
-sumtype <- datafiles %>%
-    group_by (file_type) %>% 
+sumtype <- datafiles |>
+    group_by (file_type) |> 
      summarise(
                  Count = n(),
                  GB = sum(gb),
@@ -769,8 +800,8 @@ knitr::kable(sumtype, digits = 2, format.args = list(big.mark = ",",
 
 # table - detailed summary by file_bucket
 
-sumbucket <- datafiles %>%
-    group_by (file_bucket) %>% 
+sumbucket <- datafiles |>
+    group_by (file_bucket) |> 
      summarise(
                  Count = n(),
                  GB = sum(gb),
@@ -781,4 +812,7 @@ knitr::kable(sumbucket, digits = 2, format.args = list(big.mark = ",",
 
 ``` 
 
+Row {data-height=25}
+-------------------------------------
 
+### Data as of 6/30/2025. 
