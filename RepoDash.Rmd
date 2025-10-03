@@ -163,7 +163,7 @@ ggplot(sumtime, aes(x= FY, y = Datasets)) +
   geom_text(aes(label = Datasets), vjust = -0.5) +
   theme_classic()+
   theme+
-  labs(title = "Dataset Count by FY")+
+  labs(title = "Datasets Published per FY")+
   # create x axis labels for every 1 year
   scale_x_continuous(breaks = breaks_width(1))
   
@@ -182,7 +182,7 @@ ggplot(sumtime, aes(x= FY, y = GB)) +
   geom_text(aes(label = round(GB)), vjust = -0.5) +
   theme_classic()+
   theme+
-  labs(title = "Deposit Totals by FY")+
+  labs(title = "GBs Published per FY")+
   # create x axis labels for every 1 year
   scale_x_continuous(breaks = breaks_width(1))
 
@@ -200,7 +200,7 @@ ggplot(sumtime, aes(x= FY, y = Files)) +
   geom_text(aes(label = Files), vjust = -0.5) +
   theme_classic()+
   theme+
-  labs(title = "File Count by FY")+
+  labs(title = "Files Published per FY")+
   # create x axis labels for every 1 year
   scale_x_continuous(breaks = breaks_width(1))
 
@@ -248,7 +248,7 @@ valueBox(Files, icon = "fa-file", color = "#536A2F")
 Row 
 -------------------------------------
 
-### Dataset Summary by Year
+### Dataset Summary
 
 ``` {r sumtime}
 
@@ -259,7 +259,7 @@ knitr::kable(sumtime, digits = 0,
 
 ```
 
-### Downloads by Year
+### Downloads
 
 ```{r downloads year}
 
@@ -281,7 +281,7 @@ ggplot(sumdl, aes(x=FY, y=total)) +
   theme+  
   xlab("") +
   ylab("Downloads") +
-  labs(title = "Total Downloads per Year") +
+  labs(title = "Downloads per Year") +
   
   # create x axis labels for every 1 year
   scale_x_continuous(breaks = breaks_width(1))+
@@ -495,7 +495,7 @@ ggplot(sumsub, aes(x= subject, y = Datasets, fill = subject)) +
   theme+
   theme(legend.position="none") +
   
-  labs(title = "Dataset Count by Subject",
+  labs(title = "Datasets Published per Subject",
        x = "Subject",
        y = "Datasets"
        )+
@@ -514,14 +514,14 @@ ggplot(sumsub, aes(x= subject, y = Datasets, fill = subject)) +
 ggplot(sumsub, aes(x= subject, y = GB, fill = subject)) +
   geom_col() +
   scale_fill_manual(values = mycolsmed) +
-  geom_text(aes(label = GB), vjust = -0.2) +
+  geom_text(aes(label = round(GB)), vjust = -0.2) +
   coord_cartesian(clip = 'off') +
   guides(x = guide_axis(angle = 45)) +
   
   theme_light() +
   theme +
   theme(legend.position="none") +
-  labs(title = "Deposit Totals by Subject",
+  labs(title = "GBs Published per Subject",
        x = "Subject",
        y = "GB"
        )+
@@ -547,9 +547,9 @@ ggplot(sumsub, aes(x= subject, y = Files, fill = subject)) +
   coord_cartesian(clip = 'off') +
   guides(x = guide_axis(angle = 45)) +
   theme(legend.position="none") +
-  labs(title = "File Count by Subject",
+  labs(title = "Files Published per Subject",
        x = "Subject",
-       y = "GB"
+       y = "Files (count)"
        )+
   # make room for data labels
   ylim(0,4500)
@@ -655,9 +655,9 @@ Row
 knitr::kable(datafiles |> 
   filter(!is.na(file_bucket)) |>
   mutate(file_bucket = fct_lump_n(file_bucket, n=9)) |> 
-    count(file_bucket, sort = TRUE),
-
-digits = 0, col.names = c("File Format", "Count"), format.args = list(big.mark = ",", scientific = FALSE)) 
+    count(file_bucket, sort = TRUE), 
+  digits = 0, col.names = c("File Format", "Count"), 
+  format.args = list(big.mark = ",", scientific = FALSE)) 
 ```
 
 
@@ -678,8 +678,9 @@ knitr::kable(datafiles |>
   group_by(file_bucket) |> 
   summarise(GB = sum(GB)) |> 
   arrange(desc(GB)),
-  
-digits = 2, col.names = c("File Format", "GB"), format.args = list(big.mark = ",", scientific = FALSE)) 
+  digits = 2, col.names = c("File Format", "GB"), 
+  format.args = list(big.mark = ",", 
+                     scientific = FALSE)) 
 
 ```
 
@@ -737,7 +738,9 @@ ggplot(data = fpercent, mapping = aes(x = percentile, y = GB, label = round(GB),
   geom_point(color = "darkolivegreen4", size = 3) +
   geom_text(nudge_y = 1) +
   theme_light()+
-  theme
+  theme+
+  labs(title = "75th - 99th Percentiles"
+      )
   
 
 ```
@@ -788,7 +791,7 @@ sumtype <- datafiles |>
                  GB = sum(gb),
                  AveGB = mean(gb))
 
-knitr::kable(sumtype, digits = 2, format.args = list(big.mark = ",",
+knitr::kable(sumtype, digits = 2, col.names = c("File Type", "Count", "Total GB", "Ave GB"), format.args = list(big.mark = ",",
   scientific = FALSE))  
 
 ``` 
@@ -807,7 +810,7 @@ sumbucket <- datafiles |>
                  GB = sum(gb),
                  AveGB = mean(gb))
 
-knitr::kable(sumbucket, digits = 2, format.args = list(big.mark = ",",
+knitr::kable(sumbucket, digits = 2, col.names = c("File Bucket", "Count", "Total GB", "Ave GB"), format.args = list(big.mark = ",",
   scientific = FALSE))  
 
 ``` 
